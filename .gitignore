@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Segredos
+.env
+
+# Dados (baixados/gerados localmente; nunca versionar dados de pacientes)
+data/raw/
+data/processed/
+
+# Logs de auditoria e saídas de execução
+logs/
+outputs/
+
+# Rascunhos locais
+.scratch/
