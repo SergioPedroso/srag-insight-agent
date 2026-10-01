@@ -18,8 +18,7 @@ dependencies = [
     "python-dotenv>=1.0",
     "matplotlib>=3.9",
     "feedparser>=6.0",
-    "langchain-core>=0.3",
-    "langchain-anthropic>=0.3",
+    "anthropic>=1.0",
     "langgraph>=0.2",
     "markdown>=3.7",
 ]

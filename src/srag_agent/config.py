@@ -20,9 +20,12 @@ class Settings(BaseSettings):
     )
 
     anthropic_api_key: SecretStr | None = Field(default=None, alias="ANTHROPIC_API_KEY")
-    llm_model: str = "claude-sonnet-5-5"
-    llm_temperature: float = 0.0
-    llm_max_tokens: int = 4096
+    llm_model: str = "claude-opus-5-5"
+    # Profundidade de raciocínio do modelo (low | medium | high | xhigh | max).
+    llm_effort: str = "medium"
+    llm_max_tokens: int = 16000
+    # Limite de iterações do orquestrador (guardrail contra loops de tool use).
+    max_agent_steps: int = 8
 
     raw_dir: Path = PROJECT_ROOT / "data" / "raw"
     db_path: Path = PROJECT_ROOT / "data" / "processed" / "srag.duckdb"
