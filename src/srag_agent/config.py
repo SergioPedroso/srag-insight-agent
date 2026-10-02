@@ -15,6 +15,11 @@ DEFAULT_MODELS = {
     "gemini": "gemini-3.8-flash",
     "claude": "claude-opus-5-5",
 }
+# Modelo reserva quando o principal está sobrecarregado (a Claude faz isso no servidor).
+DEFAULT_FALLBACK_MODELS = {
+    "gemini": "gemini-3.5-flash-lite",
+    "claude": None,
+}
 
 
 class Settings(BaseSettings):
@@ -32,6 +37,7 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = Field(default=None, alias="ANTHROPIC_API_KEY")
     # Vazio = modelo padrão do provedor (DEFAULT_MODELS).
     llm_model: str | None = None
+    llm_fallback_model: str | None = None
     # Profundidade de raciocínio na Claude (low | medium | high | xhigh | max).
     llm_effort: str = "medium"
     llm_max_tokens: int = 16000
@@ -59,6 +65,10 @@ class Settings(BaseSettings):
     @property
     def model_name(self) -> str:
         return self.llm_model or DEFAULT_MODELS[self.llm_provider]
+
+    @property
+    def fallback_model_name(self) -> str | None:
+        return self.llm_fallback_model or DEFAULT_FALLBACK_MODELS[self.llm_provider]
 
 
 @lru_cache

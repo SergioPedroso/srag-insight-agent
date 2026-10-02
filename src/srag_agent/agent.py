@@ -30,8 +30,10 @@ from srag_agent.guardrails import (
     GuardrailViolation,
     allowed_percentages,
     contains_injection,
+    find_unverified_counts,
     find_unverified_percentages,
     mask_pii,
+    numbers_in,
     validate_request,
 )
 from srag_agent.llm import LLMProvider, ToolCall, ToolOutcome, ToolSession, create_provider
@@ -159,6 +161,12 @@ class SragReportAgent:
             problems.append(
                 "Percentuais sem correspondência nas métricas ou fontes: " + ", ".join(unverified)
             )
+        wrong_counts = find_unverified_counts(text, self._allowed_counts(articles))
+        if wrong_counts:
+            problems.append(
+                "Contagens de casos que não aparecem nos dados (copie os valores exatos das "
+                "séries ou métricas): " + ", ".join(wrong_counts)
+            )
         invalid_ids = [i for i in analysis.noticias_citadas if not 1 <= i <= len(articles)]
         if invalid_ids:
             problems.append(f"ids de notícias inexistentes citados: {invalid_ids}")
@@ -251,6 +259,19 @@ class SragReportAgent:
                 news_payload(self.ctx.news.get(scope)), ensure_ascii=False, indent=1
             ),
         )
+
+    def _allowed_counts(self, articles) -> set[int]:
+        """Contagens que o texto pode citar: métricas, séries e números das fontes."""
+        scope = self.ctx.scope
+        charts = self.ctx.charts[scope]
+        allowed = {p.cases for p in [*charts.daily, *charts.monthly]}
+        for metric in self.ctx.metrics[scope].metrics:
+            allowed |= {metric.numerator, metric.denominator}
+            for caveat in metric.caveats:
+                allowed |= numbers_in(caveat)
+        for article in articles:
+            allowed |= numbers_in(f"{article.title} {article.summary}")
+        return allowed
 
     def _series_percentages(self) -> set[float]:
         """Variações mês a mês que o LLM pode citar ao descrever a tendência."""

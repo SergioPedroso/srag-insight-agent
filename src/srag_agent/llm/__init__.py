@@ -50,6 +50,7 @@ def create_provider(
             audit,
             api_key=api_key,
             max_tokens=settings.llm_max_tokens,
+            fallback_model=settings.fallback_model_name,
             client=client,
         )
 

@@ -6,8 +6,9 @@ Camadas:
 2. Dados: o agente não escreve SQL; as tools só executam consultas fixas em banco read-only.
 3. Conteúdo externo: notícias com padrões de injeção são descartadas e dados pessoais são
    mascarados antes de chegarem ao LLM.
-4. Saída: todo percentual citado pelo LLM precisa bater com um valor calculado ou presente
-   nas fontes; o texto final passa por mascaramento de dados pessoais.
+4. Saída: todo percentual e toda contagem de casos citados pelo LLM precisam bater com um
+   valor calculado ou presente nas fontes; o texto final passa por mascaramento de dados
+   pessoais.
 """
 
 import re
@@ -49,6 +50,14 @@ PII_PATTERNS = {
 }
 
 PERCENT_RE = re.compile(r"(-?\d{1,3}(?:[.,]\d+)?)\s?%")
+DATE_RE = re.compile(r"\b\d{4}-\d{2}(?:-\d{2})?\b|\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b")
+COUNT_RE = re.compile(r"(?<![\d.,])(\d{1,3}(?:\.\d{3})+|\d+)(?![\d]|[.,]\d)")
+MIN_CHECKED_COUNT = 100
+COUNT_NOUN_RE = re.compile(
+    r"\s*(casos|óbitos|obitos|mortes|internaç|internac|notificaç|notificac|pacientes|"
+    r"registros|pessoas|hospitaliz)",
+    re.IGNORECASE,
+)
 
 
 class GuardrailViolation(ValueError):
@@ -164,4 +173,37 @@ def find_unverified_percentages(text: str, allowed: set[float]) -> list[str]:
         value = abs(_parse_percent(raw))
         if not any(abs(value - abs(a)) <= PERCENT_TOLERANCE_PP for a in allowed):
             unverified.append(f"{raw}%")
+    return unverified
+
+
+def numbers_in(text: str) -> set[int]:
+    """Inteiros citados em um texto (aceita separador de milhar com ponto)."""
+    return {int(raw.replace(".", "")) for raw in COUNT_RE.findall(_strip_non_counts(text))}
+
+
+def _strip_non_counts(text: str) -> str:
+    """Remove datas e percentuais, que não são contagens de casos."""
+    return PERCENT_RE.sub(" ", DATE_RE.sub(" ", text))
+
+
+def _looks_like_year(value: int, following_text: str) -> bool:
+    return 1900 <= value <= 2100 and not COUNT_NOUN_RE.match(following_text)
+
+
+def find_unverified_counts(text: str, allowed: set[int]) -> list[str]:
+    """Contagens (>= MIN_CHECKED_COUNT) citadas sem correspondência exata nos dados.
+
+    Evita que o LLM invente ou transcreva errado números absolutos, como o total de
+    casos de um mês. Números entre 1900 e 2100 só são tratados como ano quando não vêm
+    seguidos de um substantivo de contagem ("2021 casos" é contagem; "em 2026" é ano).
+    """
+    cleaned = _strip_non_counts(text)
+    unverified = []
+    for match in COUNT_RE.finditer(cleaned):
+        raw = match.group(1)
+        value = int(raw.replace(".", ""))
+        if value < MIN_CHECKED_COUNT or _looks_like_year(value, cleaned[match.end() :]):
+            continue
+        if value not in allowed:
+            unverified.append(raw)
     return unverified

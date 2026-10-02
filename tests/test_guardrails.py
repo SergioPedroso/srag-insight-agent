@@ -3,6 +3,7 @@ import pytest
 from srag_agent.guardrails import (
     GuardrailViolation,
     contains_injection,
+    find_unverified_counts,
     find_unverified_percentages,
     mask_pii,
     screen_news,
@@ -56,6 +57,18 @@ def test_unverified_percentages():
     allowed = {12.3, 45.0}
     text = "Alta de 12,3% nos casos, 45% de vacinados e 80% de ocupação."
     assert find_unverified_percentages(text, allowed) == ["80%"]
+
+
+def test_unverified_counts_catch_wrong_transcription():
+    allowed = {20021, 39435, 3366}
+    text = (
+        "Pico de 39.435 casos em maio e queda até 2021 casos em agosto de 2026; "
+        "na semana de 08/09 a 14/09 foram 3366 casos (12,2%) e 15 óbitos."
+    )
+    # Erro real visto no 1º relatório: "2021 casos" (o correto era 20.021). Já "2026" é ano.
+    assert find_unverified_counts(text, allowed) == ["2021"]
+    assert find_unverified_counts("Agosto teve 20.210 casos.", allowed) == ["20.210"]
+    assert find_unverified_counts("Agosto teve 2.021 casos.", allowed) == ["2.021"]
 
 
 @pytest.mark.parametrize(

@@ -10,6 +10,7 @@ import uuid
 from typing import Any
 
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 
 from srag_agent.audit import AuditTrail
@@ -25,6 +26,8 @@ from srag_agent.llm.base import (
 )
 
 BLOCKED_FINISH_REASONS = {"SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATION"}
+# Sobrecarga ou cota esgotada: vale tentar o modelo reserva.
+OVERLOAD_STATUS = {429, 503}
 
 
 class GeminiProvider(LLMProvider):
@@ -37,19 +40,53 @@ class GeminiProvider(LLMProvider):
         *,
         api_key: str | None,
         max_tokens: int,
+        fallback_model: str | None = None,
         client: Any | None = None,
     ):
         super().__init__(model, audit)
         self._client = client or genai.Client(api_key=api_key)
         self._max_tokens = max_tokens
+        self._fallback_model = fallback_model
+        self._active_model = model
+
+    def _request(self, contents: list, config: types.GenerateContentConfig, purpose: str) -> Any:
+        """Chama o modelo ativo; se estiver sobrecarregado, troca para o reserva (e mantém)."""
+        try:
+            return self._client.models.generate_content(
+                model=self._active_model, contents=contents, config=config
+            )
+        except genai_errors.APIError as exc:
+            overloaded = exc.code in OVERLOAD_STATUS
+            if (
+                not overloaded
+                or not self._fallback_model
+                or self._active_model == self._fallback_model
+            ):
+                raise
+            self._audit.record(
+                "llm_fallback",
+                purpose,
+                provider=self.provider_name,
+                from_model=self._active_model,
+                to_model=self._fallback_model,
+                reason=f"HTTP {exc.code}",
+            )
+            self._active_model = self._fallback_model
+            return self._client.models.generate_content(
+                model=self._active_model, contents=contents, config=config
+            )
 
     def generate(self, purpose: str, system: str, contents: list, config: dict[str, Any]) -> Any:
-        response = self._client.models.generate_content(
-            model=self.model,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=system, max_output_tokens=self._max_tokens, **config
+        response = self._request(
+            contents,
+            types.GenerateContentConfig(
+                system_instruction=system,
+                max_output_tokens=self._max_tokens,
+                # O SDK não executa funções sozinho: o agente controla e audita cada chamada.
+                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+                **config,
             ),
+            purpose,
         )
         candidate = response.candidates[0] if response.candidates else None
         finish = getattr(getattr(candidate, "finish_reason", None), "name", None)
@@ -116,8 +153,6 @@ class _GeminiToolSession(ToolSession):
                     ]
                 )
             ],
-            # O SDK não executa funções sozinho: o agente controla e audita cada chamada.
-            "automatic_function_calling": types.AutomaticFunctionCallingConfig(disable=True),
         }
 
     def next_turn(self) -> AssistantTurn:
