@@ -164,7 +164,11 @@ def build_database(db_path: Path | None = None) -> dict[str, int]:
                 FROM valid
             )
             SELECT
-                row_number() OVER (ORDER BY DT_SIN_PRI, DT_NOTIFIC) AS case_id,
+                -- Desempate pela chave de origem: o mesmo caso recebe sempre o mesmo id
+                -- (a chave em si não é gravada).
+                row_number() OVER (
+                    ORDER BY DT_SIN_PRI, DT_NOTIFIC, NU_NOTIFIC, CO_MUN_NOT
+                ) AS case_id,
                 CAST(DT_SIN_PRI AS DATE) AS dt_sintomas,
                 CAST(DT_NOTIFIC AS DATE) AS dt_notificacao,
                 CAST(DT_DIGITA AS DATE) AS dt_digitacao,
