@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Arquitetura — SRAG Insight Agent</title>
+<style>
+  @page { size: A4 landscape; margin: 0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; color: #0b0b0b; background: #fff; }
+  .page { width: 297mm; height: 210mm; padding: 8mm 10mm; page-break-after: always; overflow: hidden; }
+  .page:last-child { page-break-after: auto; }
+  svg { width: 100%; height: 100%; }
+  svg text { font-family: "Segoe UI", system-ui, sans-serif; }
+  .t-title { font-size: 22px; font-weight: 700; }
+  .t-sub { font-size: 12px; fill: #52514e; }
+  .t-box { font-size: 12.5px; font-weight: 600; }
+  .t-small { font-size: 10.5px; fill: #52514e; }
+  .t-label { font-size: 10px; fill: #52514e; font-style: italic; }
+  .t-group { font-size: 12px; font-weight: 700; fill: #1c5cab; letter-spacing: .3px; }
+  /* página 2 */
+  h1 { font-size: 22px; margin: 0 0 2px; }
+  .sub { color: #52514e; font-size: 12px; margin: 0 0 12px; }
+  .cols { display: grid; grid-template-columns: 1.05fr 1fr; gap: 18px; }
+  h2 { font-size: 14px; margin: 0 0 6px; color: #1c5cab; }
+  ol, ul { margin: 0; padding-left: 18px; font-size: 11.5px; line-height: 1.45; }
+  li { margin-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 11px; }
+  th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid #e4e3df; vertical-align: top; }
+  th { color: #52514e; font-weight: 600; }
+  code { font-family: Consolas, monospace; font-size: 10.5px; background: #f2f1ed; padding: 0 3px; border-radius: 3px; }
+  .box { border: 1px solid #e4e3df; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<!-- ============================ PÁGINA 1: ARQUITETURA ============================ -->
+<section class="page">
+<svg viewBox="0 0 1120 760" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52514e"/>
+    </marker>
+    <marker id="arrow-o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#d95926"/>
+    </marker>
+    <marker id="arrow-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4a3aa7"/>
+    </marker>
+  </defs>
+
+  <text x="20" y="34" class="t-title">SRAG Insight Agent — arquitetura da solução</text>
+  <text x="20" y="56" class="t-sub">Agente orquestrador em LangGraph que combina métricas do Open DATASUS (SIVEP-Gripe) e notícias em tempo real para gerar relatórios auditáveis sobre SRAG.</text>
+
+  <!-- ---------------- Coluna esquerda: entrada e dados ---------------- -->
+  <rect x="20" y="96" width="210" height="58" rx="8" fill="#f2f1ed" stroke="#898781"/>
+  <text x="125" y="120" text-anchor="middle" class="t-box">Profissional de saúde</text>
+  <text x="125" y="138" text-anchor="middle" class="t-small">CLI: python -m srag_agent --uf SP</text>
+
+  <rect x="20" y="186" width="210" height="112" rx="8" fill="#e3f5ee" stroke="#1baf7a"/>
+  <text x="125" y="208" text-anchor="middle" class="t-box">Guardrails de entrada</text>
+  <text x="34" y="228" class="t-small">• UF em lista fechada (27 + BR)</text>
+  <text x="34" y="245" class="t-small">• foco restrito ao tema SRAG</text>
+  <text x="34" y="262" class="t-small">• detecção de prompt injection</text>
+  <text x="34" y="279" class="t-small">• bloqueio de dados pessoais</text>
+
+  <path d="M125,154 V186" stroke="#52514e" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+  <path d="M230,242 H260" stroke="#52514e" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+
+  <rect x="20" y="556" width="210" height="58" rx="8" fill="#f2f1ed" stroke="#898781"/>
+  <text x="125" y="580" text-anchor="middle" class="t-box">Open DATASUS</text>
+  <text x="125" y="598" text-anchor="middle" class="t-small">SRAG 2025–2026 (Parquet, ~557 mil casos)</text>
+
+  <rect x="20" y="640" width="210" height="96" rx="8" fill="#e3f5ee" stroke="#1baf7a"/>
+  <text x="125" y="662" text-anchor="middle" class="t-box">ETL + anonimização</text>
+  <text x="34" y="682" class="t-small">• allowlist: 21 de 194 colunas</text>
+  <text x="34" y="698" class="t-small">• sem identificadores e texto livre</text>
+  <text x="34" y="714" class="t-small">• idade → faixa etária; local → UF</text>
+  <text x="34" y="730" class="t-small">• contagens de limpeza auditadas</text>
+  <path d="M125,614 V640" stroke="#52514e" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+  <path d="M230,690 H260" stroke="#52514e" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- ---------------- Container do agente ---------------- -->
+  <rect x="260" y="90" width="540" height="420" rx="12" fill="#f5f9fe" stroke="#2a78d6" stroke-width="1.6"/>
+  <text x="276" y="112" class="t-group">AGENTE ORQUESTRADOR — LangGraph (StateGraph)</text>
+
+  <!-- nós -->
+  <rect x="290" y="150" width="200" height="56" rx="8" fill="#fff" stroke="#2a78d6" stroke-width="1.4"/>
+  <text x="390" y="174" text-anchor="middle" class="t-box">orquestrador</text>
+  <text x="390" y="192" text-anchor="middle" class="t-small">LLM decide quais tools chamar</text>
+
+  <rect x="560" y="150" width="210" height="56" rx="8" fill="#fff" stroke="#2a78d6" stroke-width="1.4"/>
+  <text x="665" y="174" text-anchor="middle" class="t-box">executar_tools</text>
+  <text x="665" y="192" text-anchor="middle" class="t-small">valida argumentos e audita</text>
+
+  <rect x="290" y="250" width="200" height="56" rx="8" fill="#fff" stroke="#1baf7a" stroke-width="1.4"/>
+  <text x="390" y="274" text-anchor="middle" class="t-box">garantir_cobertura</text>
+  <text x="390" y="292" text-anchor="middle" class="t-small">força tools obrigatórias</text>
+
+  <rect x="290" y="350" width="200" height="56" rx="8" fill="#fff" stroke="#2a78d6" stroke-width="1.4"/>
+  <text x="390" y="374" text-anchor="middle" class="t-box">redigir_analise</text>
+  <text x="390" y="392" text-anchor="middle" class="t-small">texto estruturado (Pydantic)</text>
+
+  <rect x="290" y="440" width="200" height="56" rx="8" fill="#fff" stroke="#1baf7a" stroke-width="1.4"/>
+  <text x="390" y="464" text-anchor="middle" class="t-box">validar_saida</text>
+  <text x="390" y="482" text-anchor="middle" class="t-small">números, citações, PII, injeção</text>
+
+  <rect x="560" y="440" width="210" height="56" rx="8" fill="#fff" stroke="#2a78d6" stroke-width="1.4"/>
+  <text x="665" y="464" text-anchor="middle" class="t-box">montar_relatorio</text>
+  <text x="665" y="482" text-anchor="middle" class="t-small">tabelas e gráficos determinísticos</text>
+
+  <rect x="560" y="246" width="210" height="134" rx="8" fill="#fff" stroke="#898781" stroke-dasharray="4 3"/>
+  <text x="665" y="266" text-anchor="middle" class="t-box">RunContext (estado)</text>
+  <text x="574" y="285" class="t-small">• métricas calculadas</text>
+  <text x="574" y="300" class="t-small">• séries diária e mensal</text>
+  <text x="574" y="315" class="t-small">• notícias aceitas/descartadas</text>
+  <text x="574" y="330" class="t-small">• período e data de referência</text>
+  <text x="574" y="352" class="t-label">O relatório usa estes dados,</text>
+  <text x="574" y="366" class="t-label">não números transcritos pelo LLM.</text>
+
+  <!-- arestas internas -->
+  <path d="M490,170 H560" stroke="#52514e" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+  <path d="M560,188 H490" stroke="#52514e" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+  <text x="497" y="163" class="t-label">tool calls</text>
+  <text x="497" y="202" class="t-label">resultados</text>
+  <path d="M390,206 V250" stroke="#52514e" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+  <text x="396" y="232" class="t-label">coleta concluída / limite de passos</text>
+  <path d="M390,306 V350" stroke="#52514e" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+  <path d="M390,406 V440" stroke="#52514e" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+  <path d="M290,470 C262,470 262,378 290,378" stroke="#d03b3b" stroke-width="1.4" stroke-dasharray="5 3" fill="none" marker-end="url(#arrow)"/>
+  <text x="254" y="420" text-anchor="end" class="t-label" fill="#d03b3b">revisão com</text>
+  <text x="254" y="433" text-anchor="end" class="t-label" fill="#d03b3b">o motivo (máx. 2)</text>
+  <path d="M490,468 H560" stroke="#52514e" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+  <text x="500" y="460" class="t-label">aprovado</text>
+  <path d="M665,206 V246" stroke="#898781" stroke-width="1.2" stroke-dasharray="4 3" fill="none" marker-end="url(#arrow)"/>
+  <path d="M560,370 H490" stroke="#898781" stroke-width="1.2" stroke-dasharray="4 3" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- ---------------- Coluna direita: LLM, auditoria, saída ---------------- -->
+  <rect x="830" y="96" width="270" height="150" rx="8" fill="#fdeee7" stroke="#eb6834"/>
+  <text x="965" y="118" text-anchor="middle" class="t-box">LLM — interface única de provedor</text>
+  <text x="844" y="140" class="t-small">Google Gemini (padrão, plano gratuito)</text>
+  <text x="856" y="156" class="t-small">gemini-3.8-flash → reserva 3.5-flash-lite</text>
+  <text x="844" y="178" class="t-small">Anthropic Claude (alternativo)</text>
+  <text x="856" y="194" class="t-small">claude-opus-5-5, fallback no servidor</text>
+  <text x="844" y="218" class="t-label">function calling + saída estruturada;</text>
+  <text x="844" y="232" class="t-label">o LLM não calcula números nem escreve SQL</text>
+
+  <path d="M390,150 V128 H830" stroke="#d95926" stroke-width="1.5" fill="none" marker-end="url(#arrow-o)"/>
+  <text x="560" y="123" class="t-label" fill="#d95926">decisão de tools</text>
+  <path d="M490,394 H812 V214 H830" stroke="#d95926" stroke-width="1.5" fill="none" marker-end="url(#arrow-o)"/>
+  <text x="690" y="410" class="t-label" fill="#d95926">análise interpretativa</text>
+
+  <rect x="830" y="270" width="270" height="150" rx="8" fill="#efedfa" stroke="#4a3aa7"/>
+  <text x="965" y="292" text-anchor="middle" class="t-box">Trilha de auditoria</text>
+  <text x="965" y="309" text-anchor="middle" class="t-small">logs/audit/&lt;run_id&gt;.jsonl (append-only)</text>
+  <text x="844" y="332" class="t-small">• pedido, decisões do orquestrador</text>
+  <text x="844" y="349" class="t-small">• tool calls: argumentos, duração, resultado</text>
+  <text x="844" y="366" class="t-small">• LLM: modelo, tokens, hash do prompt</text>
+  <text x="844" y="383" class="t-small">• guardrails: aprovado / rejeitado / motivo</text>
+  <text x="844" y="400" class="t-small">• troca de modelo (fallback), erros</text>
+  <path d="M800,330 H830" stroke="#4a3aa7" stroke-width="1.6" stroke-dasharray="4 3" fill="none" marker-end="url(#arrow-v)"/>
+  <text x="802" y="322" class="t-label" fill="#4a3aa7">eventos</text>
+
+  <rect x="830" y="440" width="270" height="70" rx="8" fill="#f2f1ed" stroke="#898781"/>
+  <text x="965" y="464" text-anchor="middle" class="t-box">Relatório final (HTML + Markdown)</text>
+  <text x="965" y="482" text-anchor="middle" class="t-small">4 métricas, 2 gráficos, análise, fontes,</text>
+  <text x="965" y="498" text-anchor="middle" class="t-small">limitações e id da execução</text>
+  <path d="M770,468 H830" stroke="#52514e" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- ---------------- Tools ---------------- -->
+  <path d="M770,178 H788 V528 H340 V548 M530,528 V548 M720,528 V548" stroke="#52514e" stroke-width="1.4" fill="none"/>
+  <path d="M340,540 V548" stroke="#52514e" stroke-width="1.4" fill="none" marker-end="url(#arrow)"/>
+  <path d="M530,540 V548" stroke="#52514e" stroke-width="1.4" fill="none" marker-end="url(#arrow)"/>
+  <path d="M720,540 V548" stroke="#52514e" stroke-width="1.4" fill="none" marker-end="url(#arrow)"/>
+  <text x="270" y="540" class="t-group">TOOLS</text>
+
+  <rect x="262" y="548" width="156" height="70" rx="8" fill="#fff" stroke="#2a78d6"/>
+  <text x="340" y="570" text-anchor="middle" class="t-box">consultar_metricas_srag</text>
+  <text x="340" y="588" text-anchor="middle" class="t-small">4 métricas com numerador,</text>
+  <text x="340" y="603" text-anchor="middle" class="t-small">denominador e limitações</text>
+
+  <rect x="452" y="548" width="156" height="70" rx="8" fill="#fff" stroke="#2a78d6"/>
+  <text x="530" y="570" text-anchor="middle" class="t-box">gerar_graficos_casos</text>
+  <text x="530" y="588" text-anchor="middle" class="t-small">diário (30 dias) e</text>
+  <text x="530" y="603" text-anchor="middle" class="t-small">mensal (12 meses), PNG</text>
+
+  <rect x="642" y="548" width="156" height="70" rx="8" fill="#fff" stroke="#2a78d6"/>
+  <text x="720" y="570" text-anchor="middle" class="t-box">buscar_noticias_srag</text>
+  <text x="720" y="588" text-anchor="middle" class="t-small">consulta fixa; triagem</text>
+  <text x="720" y="603" text-anchor="middle" class="t-small">anti-injeção e PII</text>
+
+  <!-- ---------------- Fontes de dados ---------------- -->
+  <rect x="262" y="650" width="346" height="86" rx="8" fill="#f2f1ed" stroke="#898781"/>
+  <text x="435" y="674" text-anchor="middle" class="t-box">DuckDB — tabela srag_cases (somente leitura)</text>
+  <text x="435" y="694" text-anchor="middle" class="t-small">SQL fixo e parametrizado; data de referência = última</text>
+  <text x="435" y="710" text-anchor="middle" class="t-small">digitação − 14 dias (atraso de notificação)</text>
+  <text x="435" y="726" text-anchor="middle" class="t-small">tabelas etl_quality e etl_metadata para auditoria</text>
+  <path d="M340,618 V650" stroke="#52514e" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+  <path d="M530,618 V650" stroke="#52514e" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+
+  <rect x="642" y="650" width="156" height="86" rx="8" fill="#fdeee7" stroke="#eb6834"/>
+  <text x="720" y="674" text-anchor="middle" class="t-box">Google News RSS</text>
+  <text x="720" y="694" text-anchor="middle" class="t-small">notícias dos últimos</text>
+  <text x="720" y="710" text-anchor="middle" class="t-small">30 dias (conteúdo</text>
+  <text x="720" y="726" text-anchor="middle" class="t-small">externo não confiável)</text>
+  <path d="M720,618 V650" stroke="#52514e" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- ---------------- Legenda ---------------- -->
+  <rect x="830" y="548" width="270" height="188" rx="8" fill="#fff" stroke="#e4e3df"/>
+  <text x="844" y="570" class="t-box">Legenda</text>
+  <rect x="844" y="582" width="22" height="14" rx="3" fill="#fff" stroke="#2a78d6"/>
+  <text x="874" y="593" class="t-small">nó do grafo / tool</text>
+  <rect x="844" y="604" width="22" height="14" rx="3" fill="#e3f5ee" stroke="#1baf7a"/>
+  <text x="874" y="615" class="t-small">guardrail determinístico</text>
+  <rect x="844" y="626" width="22" height="14" rx="3" fill="#fdeee7" stroke="#eb6834"/>
+  <text x="874" y="637" class="t-small">serviço externo (LLM, notícias)</text>
+  <rect x="844" y="648" width="22" height="14" rx="3" fill="#efedfa" stroke="#4a3aa7"/>
+  <text x="874" y="659" class="t-small">governança e auditoria</text>
+  <rect x="844" y="670" width="22" height="14" rx="3" fill="#f2f1ed" stroke="#898781"/>
+  <text x="874" y="681" class="t-small">dados e artefatos</text>
+  <path d="M844,700 H866" stroke="#d03b3b" stroke-width="1.4" stroke-dasharray="5 3"/>
+  <text x="874" y="704" class="t-small">nova tentativa após reprovação</text>
+  <path d="M844,722 H866" stroke="#d95926" stroke-width="1.5" marker-end="url(#arrow-o)"/>
+  <text x="874" y="726" class="t-small">interação com o LLM</text>
+</svg>
+</section>
+
+<!-- ============================ PÁGINA 2: FLUXO E CONTROLES ============================ -->
+<section class="page">
+  <h1>Fluxo de uma execução, guardrails e governança</h1>
+  <p class="sub">Como o agente produz um relatório e quais controles atuam em cada etapa. Todos os eventos ficam na trilha de auditoria da execução.</p>
+
+  <div class="cols">
+    <div>
+      <div class="box">
+        <h2>Fluxo de uma execução</h2>
+        <ol>
+          <li><b>Pedido</b>: o usuário informa a UF (ou Brasil) e, opcionalmente, um foco. Os guardrails de entrada validam o pedido antes de qualquer chamada ao LLM.</li>
+          <li><b>Orquestração</b>: o LLM recebe as três tools e decide quais chamar (normalmente as três, em paralelo). Os argumentos são uma enumeração fechada de UFs: o LLM não escreve SQL nem consultas de busca.</li>
+          <li><b>Execução das tools</b>: métricas e séries vêm de SQL fixo no DuckDB somente leitura; notícias passam por triagem anti-injeção e mascaramento de PII. Tudo fica no <code>RunContext</code>.</li>
+          <li><b>Cobertura</b>: se o LLM não chamou alguma tool obrigatória ou estourou o limite de passos, o grafo a executa de forma determinística e registra o motivo.</li>
+          <li><b>Redação</b>: o LLM escreve a análise em formato estruturado (Pydantic), a partir das métricas, das séries e das notícias, que chegam marcadas como conteúdo não confiável.</li>
+          <li><b>Validação</b>: percentuais e contagens precisam bater com os dados; citações de notícias precisam existir; o texto não pode conter instruções nem dados pessoais. Se reprovar, o LLM recebe o motivo e reescreve (até 2 tentativas); persistindo, o relatório sai com aviso explícito.</li>
+          <li><b>Relatório</b>: tabela de métricas, gráficos e lista de fontes são montados a partir dos dados; o LLM contribui apenas com os textos interpretativos.</li>
+        </ol>
+      </div>
+      <div class="box">
+        <h2>Métricas (definições e limitações)</h2>
+        <table>
+          <tr><th>Métrica</th><th>Cálculo</th><th>Limitação</th></tr>
+          <tr><td>Aumento de casos</td><td>casos dos últimos 7 dias completos vs. 7 dias anteriores</td><td>semana mais recente pode ser revisada</td></tr>
+          <tr><td>Mortalidade</td><td>óbitos por SRAG ÷ casos com desfecho (90 dias)</td><td>letalidade entre casos, não mortalidade populacional</td></tr>
+          <tr><td>Ocupação de UTI</td><td>internados em UTI ÷ hospitalizados (30 dias)</td><td>proxy: a base não tem nº de leitos</td></tr>
+          <tr><td>Vacinação</td><td>vacinados (COVID-19) ÷ casos com informação (30 dias)</td><td>só pessoas com SRAG, não a população</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div>
+      <div class="box">
+        <h2>Camadas de guardrails</h2>
+        <table>
+          <tr><th>Camada</th><th>Controle</th></tr>
+          <tr><td>Entrada</td><td>UF em lista fechada; foco ≤ 300 caracteres, restrito ao tema, sem padrões de injeção nem dados pessoais.</td></tr>
+          <tr><td>Dados</td><td>Banco aberto em modo somente leitura; consultas SQL fixas e parametrizadas; LLM sem acesso a SQL.</td></tr>
+          <tr><td>Tools</td><td>Schema estrito; tool desconhecida ou argumento inválido vira erro devolvido ao LLM; limite de passos do orquestrador.</td></tr>
+          <tr><td>Conteúdo externo</td><td>Notícias com padrões de injeção são descartadas; PII mascarada; texto entregue ao LLM como não confiável.</td></tr>
+          <tr><td>Saída</td><td>Percentuais e contagens conferidos com os dados; ids de notícias verificados; detecção de instruções; mascaramento de PII; revisão automática.</td></tr>
+          <tr><td>Resiliência</td><td>Modelo reserva quando o principal está sobrecarregado (Gemini) ou recusa a requisição (Claude); falha das notícias não derruba o relatório.</td></tr>
+        </table>
+      </div>
+      <div class="box">
+        <h2>Dados sensíveis</h2>
+        <ul>
+          <li>O ETL lê só 21 das 194 colunas (allowlist documentada no código).</li>
+          <li>Removidos antes de gravar: nº da notificação, data de nascimento, município, unidade de saúde, ocupação, lotes de vacina e todos os campos de texto livre.</li>
+          <li>Idade exata vira faixa etária; localização fica restrita à UF.</li>
+          <li>O LLM só recebe agregados (contagens e proporções), nunca registros individuais.</li>
+          <li>Dados brutos, banco, logs e <code>.env</code> ficam fora do Git.</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h2>Governança e transparência</h2>
+        <ul>
+          <li>Trilha de auditoria JSONL por execução, com sequência e horário de cada evento.</li>
+          <li>Cada métrica traz numerador, denominador, período, definição e limitações.</li>
+          <li>Prompts versionados no código; hash do prompt registrado a cada chamada.</li>
+          <li>O relatório informa modelo usado, data de corte, data de referência e id da execução.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>
