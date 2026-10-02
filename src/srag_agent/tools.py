@@ -20,6 +20,7 @@ from srag_agent.charts import plot_daily_cases, plot_monthly_cases
 from srag_agent.db import connect_readonly
 from srag_agent.geo import BRAZILIAN_UFS
 from srag_agent.guardrails import NewsScreening, ReportRequest, screen_news
+from srag_agent.llm.base import ToolDefinition
 from srag_agent.metrics import (
     MetricsSnapshot,
     ReportPeriod,
@@ -66,6 +67,7 @@ class RunContext:
     period: ReportPeriod
     output_dir: Path
     db_path: Path | None = None
+    model_label: str = ""
     metrics: dict[str, MetricsSnapshot] = field(default_factory=dict)
     charts: dict[str, ChartArtifacts] = field(default_factory=dict)
     news: dict[str, NewsScreening] = field(default_factory=dict)
@@ -194,13 +196,10 @@ class ToolSpec:
     description: str
     handler: Callable[[RunContext, str], dict[str, Any]]
 
-    def definition(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "description": self.description,
-            "input_schema": _SCOPE_SCHEMA,
-            "strict": True,
-        }
+    def definition(self) -> ToolDefinition:
+        return ToolDefinition(
+            name=self.name, description=self.description, input_schema=_SCOPE_SCHEMA
+        )
 
 
 TOOLS: dict[str, ToolSpec] = {
@@ -239,7 +238,7 @@ TOOLS: dict[str, ToolSpec] = {
 REQUIRED_TOOLS = tuple(TOOLS)
 
 
-def tool_definitions() -> list[dict[str, Any]]:
+def tool_definitions() -> list[ToolDefinition]:
     return [spec.definition() for spec in TOOLS.values()]
 
 

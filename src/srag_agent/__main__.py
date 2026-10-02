@@ -12,6 +12,7 @@ import sys
 
 from srag_agent.agent import generate_report
 from srag_agent.guardrails import GuardrailViolation
+from srag_agent.llm import MissingAPIKeyError
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -26,6 +27,9 @@ def main(argv: list[str] | None = None) -> int:
     except GuardrailViolation as exc:
         print(f"Pedido bloqueado pelos guardrails: {exc}", file=sys.stderr)
         return 2
+    except MissingAPIKeyError as exc:
+        print(f"Configuração incompleta: {exc} Veja o .env.example.", file=sys.stderr)
+        return 3
     print(f"Relatório: {report_path}")
     print(f"Auditoria: {audit.path}")
     return 0

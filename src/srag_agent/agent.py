@@ -34,7 +34,7 @@ from srag_agent.guardrails import (
     mask_pii,
     validate_request,
 )
-from srag_agent.llm import LLMClient
+from srag_agent.llm import LLMProvider, ToolCall, ToolOutcome, ToolSession, create_provider
 from srag_agent.metrics import get_report_period
 from srag_agent.prompts import (
     FOCUS_BLOCK,
@@ -58,7 +58,7 @@ MAX_WRITER_ATTEMPTS = 2
 
 
 class AgentState(TypedDict, total=False):
-    messages: list
+    pending_calls: list[ToolCall]
     steps: int
     analysis: ReportAnalysis
     writer_attempts: int
@@ -68,52 +68,40 @@ class AgentState(TypedDict, total=False):
 
 
 class SragReportAgent:
-    def __init__(self, ctx: RunContext, llm: LLMClient, settings: Settings):
+    def __init__(self, ctx: RunContext, llm: LLMProvider, settings: Settings):
         self.ctx = ctx
         self.llm = llm
         self.settings = settings
+        self._session: ToolSession | None = None
         self.graph = self._build_graph()
 
     # ---- nós do grafo -------------------------------------------------------------------
 
     def orchestrate(self, state: AgentState) -> AgentState:
-        messages = state.get("messages") or [
-            {
-                "role": "user",
-                "content": (
-                    f"Gere o relatório de SRAG para o escopo: "
-                    f"{self.ctx.request.uf or 'BR'} ({self.ctx.scope})."
-                ),
-            }
-        ]
-        response = self.llm.run_with_tools(
-            "orchestrator", ORCHESTRATOR_SYSTEM, messages, tool_definitions()
+        if self._session is None:
+            self._session = self.llm.start_tool_session(
+                "orchestrator",
+                ORCHESTRATOR_SYSTEM,
+                f"Gere o relatório de SRAG para o escopo: "
+                f"{self.ctx.request.uf or 'BR'} ({self.ctx.scope}).",
+                tool_definitions(),
+            )
+        turn = self._session.next_turn()
+        self.ctx.audit.record(
+            "agent_decision",
+            "orchestrator",
+            tool_requests=[{"tool": c.name, "arguments": c.arguments} for c in turn.tool_calls],
+            message=turn.text,
         )
-        decisions = [
-            {"tool": b.name, "arguments": b.input} for b in response.content if b.type == "tool_use"
-        ]
-        self.ctx.audit.record("agent_decision", "orchestrator", tool_requests=decisions)
-        return {
-            "messages": [*messages, {"role": "assistant", "content": response.content}],
-            "steps": state.get("steps", 0) + 1,
-        }
+        return {"pending_calls": turn.tool_calls, "steps": state.get("steps", 0) + 1}
 
     def run_tools(self, state: AgentState) -> AgentState:
-        last = state["messages"][-1]["content"]
-        results = []
-        for block in last:
-            if block.type != "tool_use":
-                continue
-            content, is_error = execute_tool(self.ctx, block.name, block.input)
-            results.append(
-                {
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": content,
-                    "is_error": is_error,
-                }
-            )
-        return {"messages": [*state["messages"], {"role": "user", "content": results}]}
+        outcomes = []
+        for call in state["pending_calls"]:
+            content, is_error = execute_tool(self.ctx, call.name, call.arguments)
+            outcomes.append(ToolOutcome(call=call, content=content, is_error=is_error))
+        self._session.add_tool_results(outcomes)
+        return {"pending_calls": []}
 
     def ensure_coverage(self, state: AgentState) -> AgentState:
         scope = self.ctx.scope
@@ -152,10 +140,7 @@ class SragReportAgent:
                 problems="\n".join(f"- {p}" for p in state["validation_problems"])
             )
         analysis = self.llm.structured(
-            f"writer_attempt_{attempts}",
-            WRITER_SYSTEM,
-            [{"role": "user", "content": user_content}],
-            ReportAnalysis,
+            f"writer_attempt_{attempts}", WRITER_SYSTEM, user_content, ReportAnalysis
         )
         return {"analysis": analysis, "writer_attempts": attempts}
 
@@ -213,7 +198,7 @@ class SragReportAgent:
     # ---- roteamento ---------------------------------------------------------------------
 
     def _after_orchestrator(self, state: AgentState) -> str:
-        wants_tools = any(b.type == "tool_use" for b in state["messages"][-1]["content"])
+        wants_tools = bool(state["pending_calls"])
         if wants_tools and state["steps"] < self.settings.max_agent_steps:
             return "executar_tools"
         if wants_tools:
@@ -296,11 +281,12 @@ def generate_report(
         "run_started",
         "cli",
         request=request,
-        model=settings.llm_model,
-        effort=settings.llm_effort,
+        provider=settings.llm_provider,
+        model=settings.model_name,
         reporting_lag_days=settings.reporting_lag_days,
     )
 
+    llm = create_provider(settings, audit, llm_client)
     with connect_readonly(settings.db_path) as con:
         period = get_report_period(con, settings.reporting_lag_days)
     ctx = RunContext(
@@ -309,8 +295,9 @@ def generate_report(
         period=period,
         output_dir=settings.outputs_dir / audit.run_id,
         db_path=settings.db_path,
+        model_label=f"{settings.llm_provider} / {settings.model_name}",
     )
-    agent = SragReportAgent(ctx, LLMClient(settings, audit, llm_client), settings)
+    agent = SragReportAgent(ctx, llm, settings)
     try:
         final_state = agent.graph.invoke({}, {"recursion_limit": 4 * settings.max_agent_steps})
     except Exception as exc:

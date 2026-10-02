@@ -10,7 +10,6 @@ from pathlib import Path
 import markdown
 
 from srag_agent.analysis import ReportAnalysis
-from srag_agent.config import get_settings
 from srag_agent.metrics import format_percent
 from srag_agent.tools import RunContext
 
@@ -104,7 +103,6 @@ def _news_section(ctx: RunContext, analysis: ReportAnalysis) -> str:
 
 
 def build_markdown(ctx: RunContext, analysis: ReportAnalysis, warnings: list[str]) -> str:
-    settings = get_settings()
     charts = ctx.charts[ctx.scope]
     period = ctx.period
     generated = datetime.now(UTC).strftime("%d/%m/%Y %H:%M UTC")
@@ -153,7 +151,7 @@ confundir atraso de notificação com queda de casos.</small>
 - **Fonte dos dados:** SIVEP-Gripe, dataset "SRAG 2019 a 2026" do Open DATASUS, tratado e
   anonimizado (sem identificadores, idade em faixas, localização por UF).
 - **Cálculo:** consultas SQL fixas, em banco somente leitura; o LLM não calcula números.
-- **Modelo:** `{settings.llm_model}` (orquestração das tools e redação da análise).
+- **Modelo:** `{ctx.model_label}` (orquestração das tools e redação da análise).
 - **Validação:** percentuais citados conferidos contra os valores calculados, citações de
   notícias verificadas e mascaramento de dados pessoais.
 - **Auditoria:** todas as decisões desta execução estão em

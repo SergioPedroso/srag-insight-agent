@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -10,6 +11,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 OPENDATASUS_BASE_URL = "https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/SRAG"
 
+DEFAULT_MODELS = {
+    "gemini": "gemini-3.8-flash",
+    "claude": "claude-opus-5-5",
+}
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -17,11 +23,16 @@ class Settings(BaseSettings):
         env_file=PROJECT_ROOT / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
     )
 
+    # Provedor do LLM: "gemini" (plano gratuito do Google AI Studio) ou "claude".
+    llm_provider: Literal["gemini", "claude"] = "gemini"
+    gemini_api_key: SecretStr | None = Field(default=None, alias="GEMINI_API_KEY")
     anthropic_api_key: SecretStr | None = Field(default=None, alias="ANTHROPIC_API_KEY")
-    llm_model: str = "claude-opus-5-5"
-    # Profundidade de raciocínio do modelo (low | medium | high | xhigh | max).
+    # Vazio = modelo padrão do provedor (DEFAULT_MODELS).
+    llm_model: str | None = None
+    # Profundidade de raciocínio na Claude (low | medium | high | xhigh | max).
     llm_effort: str = "medium"
     llm_max_tokens: int = 16000
     # Limite de iterações do orquestrador (guardrail contra loops de tool use).
@@ -44,6 +55,10 @@ class Settings(BaseSettings):
     # data de referência deslocada por este atraso para não confundir atraso de
     # notificação com queda real de casos.
     reporting_lag_days: int = 14
+
+    @property
+    def model_name(self) -> str:
+        return self.llm_model or DEFAULT_MODELS[self.llm_provider]
 
 
 @lru_cache

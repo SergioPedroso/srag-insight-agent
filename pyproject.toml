@@ -19,6 +19,7 @@ dependencies = [
     "matplotlib>=3.9",
     "feedparser>=6.0",
     "anthropic>=1.0",
+    "google-genai>=2.0",
     "langgraph>=0.2",
     "markdown>=3.7",
 ]
