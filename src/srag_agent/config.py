@@ -49,8 +49,8 @@ class Settings(BaseSettings):
     logs_dir: Path = PROJECT_ROOT / "logs"
     outputs_dir: Path = PROJECT_ROOT / "outputs"
 
-    # Arquivos publicados no Open DATASUS (dataset "SRAG 2019 a 2026").
-    # Os nomes mudam a cada atualização do portal; ajuste aqui ou via SRAG_SOURCE_FILES.
+    # Plano B: publicações usadas se a página do portal não puder ser lida. Normalmente
+    # `python -m srag_agent.data.update` descobre sozinho as publicações mais recentes.
     source_files: list[str] = [
         "2025/INFLUD25-28-09-2026.parquet",
         "2026/INFLUD26-28-09-2026.parquet",
@@ -61,6 +61,8 @@ class Settings(BaseSettings):
     # data de referência deslocada por este atraso para não confundir atraso de
     # notificação com queda real de casos.
     reporting_lag_days: int = 14
+    # Base local mais velha que isso (em dias) gera aviso no relatório para atualizar.
+    stale_after_days: int = 21
 
     @property
     def model_name(self) -> str:

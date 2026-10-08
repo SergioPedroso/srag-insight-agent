@@ -1,15 +1,17 @@
 """Download dos arquivos de SRAG publicados no Open DATASUS.
 
-Uso:
+Uso (prefira `python -m srag_agent.data.update`, que também roda o ETL):
     python -m srag_agent.data.download
 """
 
 import logging
+from datetime import date
 from pathlib import Path
 
 import httpx
 
 from srag_agent.config import OPENDATASUS_BASE_URL, get_settings
+from srag_agent.data.sources import SourceFile, resolve_sources
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +36,10 @@ def download_file(url: str, destination: Path, *, overwrite: bool = False) -> Pa
     return destination
 
 
-def download_all(*, overwrite: bool = False) -> list[Path]:
+def download_all(sources: list[SourceFile], *, overwrite: bool = False) -> list[Path]:
+    """Baixa as publicações indicadas e o dicionário de dados (arquivos existentes são mantidos)."""
     settings = get_settings()
-    remote_paths = [*settings.source_files, settings.data_dictionary_file]
+    remote_paths = [*(s.remote_path for s in sources), settings.data_dictionary_file]
     return [
         download_file(
             f"{OPENDATASUS_BASE_URL}/{remote}",
@@ -49,7 +52,8 @@ def download_all(*, overwrite: bool = False) -> list[Path]:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    download_all()
+    sources, _ = resolve_sources(get_settings().source_files, date.today())
+    download_all(sources)
 
 
 if __name__ == "__main__":

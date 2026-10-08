@@ -108,11 +108,17 @@ def build_markdown(ctx: RunContext, analysis: ReportAnalysis, warnings: list[str
     generated = datetime.now(UTC).strftime("%d/%m/%Y %H:%M UTC")
     warning_block = "\n".join(f"> ⚠️ {w}" for w in warnings)
     attention = "\n".join(f"- {p}" for p in analysis.pontos_de_atencao)
+    publication = (
+        f"Publicação Open DATASUS de {period.source_published:%d/%m/%Y} · "
+        if period.source_published
+        else ""
+    )
 
     return f"""# Relatório de SRAG — {ctx.scope}
 
-<p class="meta">Gerado em {generated} · Base atualizada até {period.data_cutoff:%d/%m/%Y} ·
-Métricas até {period.reference_date:%d/%m/%Y} · Execução <code>{ctx.audit.run_id}</code></p>
+<p class="meta">Gerado em {generated} · {publication}Base atualizada até
+{period.data_cutoff:%d/%m/%Y} · Métricas até {period.reference_date:%d/%m/%Y} ·
+Execução <code>{ctx.audit.run_id}</code></p>
 
 {warning_block}
 

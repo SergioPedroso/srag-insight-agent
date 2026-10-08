@@ -102,12 +102,30 @@ flowchart LR
   existe.
 - **Notícias via Google News RSS.** Gratuito, sem chave e com notícias do dia (InfoGripe/Fiocruz,
   secretarias, imprensa regional). A consulta é fixa e o conteúdo é tratado como não confiável.
+- **Sempre a publicação mais recente.** O portal troca o nome do arquivo a cada atualização
+  (`INFLUD26-28-09-2026.parquet` = dados de 2026 publicados em 28/09/2026). O comando de
+  atualização lê a página do dataset, escolhe a publicação mais nova de cada ano e só
+  baixa e reprocessa quando há novidade.
 
 ## Dados e tratamento
 
 **Fonte:** dataset [SRAG 2019 a 2026](https://dadosabertos.saude.gov.br/dataset/srag-2019-a-2026)
-do Open DATASUS, arquivos Parquet de **2025 e 2026** (cobrem os últimos 12 meses), e o
-dicionário de dados oficial.
+do Open DATASUS, arquivos Parquet do **ano anterior e do ano corrente** (cobrem os últimos
+12 meses), e o dicionário de dados oficial.
+
+**Atualização** ([`data/update.py`](src/srag_agent/data/update.py),
+[`data/sources.py`](src/srag_agent/data/sources.py)):
+
+1. Lê a página do dataset e identifica, pelo nome do arquivo, a publicação mais recente de
+   cada ano necessário.
+2. Compara com as publicações usadas no último ETL (tabela `etl_metadata`). Se forem as
+   mesmas, não faz nada.
+3. Se houver novidade, baixa, refaz o ETL e apaga as versões antigas dos mesmos anos.
+4. Se a página estiver indisponível, usa as publicações de `SRAG_SOURCE_FILES` (plano B) e
+   registra essa origem nos metadados.
+
+O relatório mostra a data da publicação usada e, se a base estiver com mais de 21 dias
+(`SRAG_STALE_AFTER_DAYS`), sai com um aviso para atualizar.
 
 | Etapa | Resultado na base atual |
 |---|---|
@@ -167,6 +185,7 @@ cada evento:
 | Evento | Conteúdo |
 |---|---|
 | `run_started` | pedido validado, provedor, modelo, atraso de notificação considerado |
+| `data_source` | publicação do Open DATASUS usada, data de corte e data de referência |
 | `llm_call` | finalidade (orquestrador, redator), modelo pedido e efetivo, motivo de parada, tokens, **hash SHA-256 do prompt** e do payload |
 | `agent_decision` | quais tools o orquestrador decidiu chamar e com quais argumentos |
 | `tool_call` / `tool_result` / `tool_error` | argumentos, duração e resultado de cada tool |
@@ -185,8 +204,8 @@ Trecho real ([auditoria completa](docs/exemplo-relatorio/auditoria.jsonl)):
 14 guardrail       output_validation approved
 ```
 
-O próprio relatório informa o modelo usado, a data de corte da base, a data de referência
-das métricas, o id da execução e o caminho do log de auditoria. Os prompts ficam
+O próprio relatório informa o modelo usado, a publicação do Open DATASUS, a data de corte
+da base, a data de referência das métricas, o id da execução e o caminho do log de auditoria. Os prompts ficam
 versionados em [`prompts.py`](src/srag_agent/prompts.py).
 
 ## Tratamento de dados sensíveis
@@ -222,8 +241,7 @@ Preencha `GEMINI_API_KEY` no `.env`. Para usar a Claude, defina
 `SRAG_LLM_PROVIDER=claude` e `ANTHROPIC_API_KEY`.
 
 ```bash
-python -m srag_agent.data.download     # baixa os Parquet de 2025/2026 e o dicionário (~43 MB)
-python -m srag_agent.data.etl          # gera data/processed/srag.duckdb
+python -m srag_agent.data.update       # baixa a publicação mais recente (~43 MB) e roda o ETL
 python -m srag_agent                   # relatório do Brasil
 python -m srag_agent --uf SP           # relatório de uma UF
 python -m srag_agent --uf RJ --foco "Como está a pressão sobre UTIs pediátricas?"
@@ -231,6 +249,11 @@ python -m srag_agent --uf RJ --foco "Como está a pressão sobre UTIs pediátric
 
 O relatório é salvo em `outputs/<run_id>/relatorio.html` (e `.md`, com os gráficos PNG), e a
 auditoria em `logs/audit/<run_id>.jsonl`.
+
+Para manter os dados em dia, rode `python -m srag_agent.data.update` antes de gerar
+relatórios (ele não faz nada se a base já estiver atualizada). Use `--forcar` para refazer o
+ETL mesmo sem publicação nova. As etapas também podem ser rodadas separadamente com
+`python -m srag_agent.data.download` e `python -m srag_agent.data.etl`.
 
 **Configuração** (variáveis no `.env`, todas opcionais exceto a chave):
 
@@ -242,12 +265,13 @@ auditoria em `logs/audit/<run_id>.jsonl`.
 | `SRAG_LLM_EFFORT` | `medium` | profundidade de raciocínio (Claude) |
 | `SRAG_REPORTING_LAG_DAYS` | `14` | dias excluídos por atraso de notificação |
 | `SRAG_MAX_AGENT_STEPS` | `8` | limite de iterações do orquestrador |
-| `SRAG_SOURCE_FILES` | arquivos de 2025 e 2026 | nomes dos Parquet no portal (mudam a cada atualização) |
+| `SRAG_STALE_AFTER_DAYS` | `21` | idade da base que gera aviso para atualizar |
+| `SRAG_SOURCE_FILES` | publicações de 28/09/2026 | plano B, se a página do portal não puder ser lida |
 
 ## Qualidade de código e testes
 
 ```bash
-pytest          # 38 testes, sem chamadas reais a LLM
+pytest          # 45 testes, sem chamadas reais a LLM nem ao portal
 ruff check src tests && ruff format --check src tests
 ```
 
@@ -261,6 +285,9 @@ ruff check src tests && ruff format --check src tests
   Claude**, cobrindo a cobertura forçada de tool, a reprovação seguida de revisão, o descarte
   de notícia maliciosa e a auditoria.
 - **Resiliência:** troca para o modelo reserva quando o principal responde 503.
+- **Atualização dos dados:** escolha da publicação mais recente de cada ano, plano B com o
+  portal fora do ar, nada a fazer quando a base está em dia, limpeza só das versões
+  substituídas e aviso de base desatualizada no relatório.
 
 ## Estrutura do repositório
 
@@ -283,7 +310,7 @@ srag-insight-agent/
 │   ├── prompts.py               # prompts versionados
 │   ├── report.py                # montagem do relatório
 │   ├── llm/                     # interface + adaptadores Gemini e Claude
-│   ├── data/                    # download e ETL
+│   ├── data/                    # descoberta, download, ETL e atualização
 │   ├── config.py, db.py, geo.py
 └── tests/                       # pytest
 ```

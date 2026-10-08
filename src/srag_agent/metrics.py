@@ -14,7 +14,7 @@ from datetime import date, timedelta
 import duckdb
 from pydantic import BaseModel, Field
 
-from srag_agent.data.etl import CASES_TABLE
+from srag_agent.data.etl import CASES_TABLE, META_PUBLISHED, METADATA_TABLE
 from srag_agent.geo import BRAZILIAN_UFS
 
 GROWTH_WINDOW_DAYS = 7
@@ -27,6 +27,9 @@ class ReportPeriod(BaseModel):
     data_cutoff: date = Field(description="Data de digitação mais recente na base")
     reference_date: date = Field(description="Último dia considerado completo para métricas")
     lag_days: int
+    source_published: date | None = Field(
+        default=None, description="Data da publicação do Open DATASUS usada no ETL"
+    )
 
 
 class Metric(BaseModel):
@@ -92,7 +95,19 @@ def get_report_period(con: duckdb.DuckDBPyConnection, lag_days: int) -> ReportPe
         data_cutoff=cutoff,
         reference_date=cutoff - timedelta(days=lag_days),
         lag_days=lag_days,
+        source_published=_source_published(con),
     )
+
+
+def _source_published(con: duckdb.DuckDBPyConnection) -> date | None:
+    """Data da publicação usada no ETL (None em bancos sem metadados, como os de teste)."""
+    try:
+        row = con.execute(
+            f"SELECT valor FROM {METADATA_TABLE} WHERE chave = ?", [META_PUBLISHED]
+        ).fetchone()
+    except duckdb.CatalogException:
+        return None
+    return date.fromisoformat(row[0]) if row and row[0] else None
 
 
 def case_growth_rate(con, period: ReportPeriod, uf: str | None = None) -> Metric:

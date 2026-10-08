@@ -17,6 +17,7 @@ Fluxo (o pedido já chega validado pelos guardrails de entrada em `generate_repo
 """
 
 import json
+from datetime import date
 from pathlib import Path
 from typing import TypedDict
 
@@ -37,7 +38,7 @@ from srag_agent.guardrails import (
     validate_request,
 )
 from srag_agent.llm import LLMProvider, ToolCall, ToolOutcome, ToolSession, create_provider
-from srag_agent.metrics import get_report_period
+from srag_agent.metrics import ReportPeriod, get_report_period
 from srag_agent.prompts import (
     FOCUS_BLOCK,
     ORCHESTRATOR_SYSTEM,
@@ -283,12 +284,24 @@ class SragReportAgent:
         return allowed
 
 
+def _freshness_warnings(period: ReportPeriod, stale_after_days: int, today: date) -> list[str]:
+    """Avisa quando a base local está velha (o portal provavelmente já tem dados mais novos)."""
+    age = (today - period.data_cutoff).days
+    if age <= stale_after_days:
+        return []
+    return [
+        f"A base termina em {period.data_cutoff:%d/%m/%Y} ({age} dias atrás). Atualize com "
+        "`python -m srag_agent.data.update` para usar a publicação mais recente do Open DATASUS."
+    ]
+
+
 def generate_report(
     uf: str | None = None,
     focus: str | None = None,
     *,
     settings: Settings | None = None,
     llm_client=None,
+    today: date | None = None,
 ) -> tuple[Path, AuditTrail]:
     """Ponto de entrada: valida o pedido, executa o grafo e devolve o relatório e a auditoria."""
     settings = settings or get_settings()
@@ -310,6 +323,10 @@ def generate_report(
     llm = create_provider(settings, audit, llm_client)
     with connect_readonly(settings.db_path) as con:
         period = get_report_period(con, settings.reporting_lag_days)
+    audit.record("data_source", "database", period=period)
+    warnings = _freshness_warnings(period, settings.stale_after_days, today or date.today())
+    if warnings:
+        audit.record("guardrail", "data_freshness", decision="warn", warnings=warnings)
     ctx = RunContext(
         request=request,
         audit=audit,
@@ -320,7 +337,9 @@ def generate_report(
     )
     agent = SragReportAgent(ctx, llm, settings)
     try:
-        final_state = agent.graph.invoke({}, {"recursion_limit": 4 * settings.max_agent_steps})
+        final_state = agent.graph.invoke(
+            {"warnings": warnings}, {"recursion_limit": 4 * settings.max_agent_steps}
+        )
     except Exception as exc:
         audit.record("run_failed", "agent", error=f"{type(exc).__name__}: {exc}")
         raise

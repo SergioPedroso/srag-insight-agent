@@ -30,6 +30,7 @@ dev = ["pytest>=8", "ruff>=0.6", "pypdf>=5"]
 [project.scripts]
 srag-download = "srag_agent.data.download:main"
 srag-etl = "srag_agent.data.etl:main"
+srag-update = "srag_agent.data.update:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

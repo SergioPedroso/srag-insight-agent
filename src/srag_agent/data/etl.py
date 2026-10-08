@@ -21,12 +21,15 @@ from pathlib import Path
 import duckdb
 
 from srag_agent.config import get_settings
+from srag_agent.data.sources import latest_per_year, local_sources, parse_source
 
 logger = logging.getLogger(__name__)
 
 CASES_TABLE = "srag_cases"
 QUALITY_TABLE = "etl_quality"
 METADATA_TABLE = "etl_metadata"
+META_SOURCE_FILES = "arquivos_origem"
+META_PUBLISHED = "publicacao_open_datasus"
 
 # Colunas lidas do arquivo bruto e o motivo de cada uma estar aqui.
 SELECTED_COLUMNS: dict[str, str] = {
@@ -102,11 +105,30 @@ def _source_glob(raw_dir: Path, source_files: list[str]) -> list[str]:
     return [p.as_posix() for p in paths]
 
 
-def build_database(db_path: Path | None = None) -> dict[str, int]:
-    """Executa o ETL completo e retorna as contagens de qualidade (também gravadas no banco)."""
+def _default_sources(raw_dir: Path, configured: list[str]) -> list[str]:
+    """Sem lista explícita: a publicação local mais recente de cada ano (ou a configuração)."""
+    local = local_sources(raw_dir)
+    if not local:
+        return configured
+    years = sorted({s.year for s in local})
+    return [s.remote_path for s in latest_per_year(local, years)]
+
+
+def build_database(
+    db_path: Path | None = None,
+    source_files: list[str] | None = None,
+    *,
+    sources_origin: str = "arquivos locais",
+) -> dict[str, int]:
+    """Executa o ETL completo e retorna as contagens de qualidade (também gravadas no banco).
+
+    `source_files` são caminhos como `2026/INFLUD26-28-09-2026.parquet`; se omitido, usa a
+    publicação mais recente de cada ano já baixada em `raw_dir`.
+    """
     settings = get_settings()
     db_path = db_path or settings.db_path
-    sources = _source_glob(settings.raw_dir, settings.source_files)
+    source_files = source_files or _default_sources(settings.raw_dir, settings.source_files)
+    sources = _source_glob(settings.raw_dir, source_files)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     columns = ", ".join(SELECTED_COLUMNS)
@@ -212,7 +234,7 @@ def build_database(db_path: Path | None = None) -> dict[str, int]:
             **_null_counts(con),
         }
         _write_quality(con, quality)
-        _write_metadata(con, sources)
+        _write_metadata(con, sources, sources_origin)
 
     logger.info("ETL concluído: %s", quality)
     return quality
@@ -231,14 +253,18 @@ def _write_quality(con: duckdb.DuckDBPyConnection, quality: dict[str, int]) -> N
     con.executemany(f"INSERT INTO {QUALITY_TABLE} VALUES (?, ?)", list(quality.items()))
 
 
-def _write_metadata(con: duckdb.DuckDBPyConnection, sources: list[str]) -> None:
+def _write_metadata(con: duckdb.DuckDBPyConnection, sources: list[str], origin: str) -> None:
     con.execute(f"CREATE OR REPLACE TABLE {METADATA_TABLE} (chave VARCHAR, valor VARCHAR)")
     max_digitacao = con.execute(f"SELECT max(dt_digitacao) FROM {CASES_TABLE}").fetchone()[0]
+    names = [Path(s).name for s in sources]
+    published = [p.published for name in names if (p := parse_source(name))]
     con.executemany(
         f"INSERT INTO {METADATA_TABLE} VALUES (?, ?)",
         [
             ("etl_executado_em", datetime.now(UTC).isoformat(timespec="seconds")),
-            ("arquivos_origem", ", ".join(Path(s).name for s in sources)),
+            (META_SOURCE_FILES, ", ".join(names)),
+            (META_PUBLISHED, str(max(published)) if published else ""),
+            ("origem_lista_arquivos", origin),
             ("data_mais_recente_digitacao", str(max_digitacao)),
         ],
     )

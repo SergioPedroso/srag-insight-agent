@@ -4,6 +4,7 @@ Cenário: o orquestrador pede só 2 das 3 tools (a cobertura deve forçar a de n
 redator cita um número inventado na 1ª tentativa (a validação deve reprovar e pedir revisão).
 """
 
+from datetime import date
 from types import SimpleNamespace
 
 import pytest
@@ -140,7 +141,9 @@ def fake_news(monkeypatch):
 def test_end_to_end_report(settings, provider):
     settings = settings.model_copy(update={"llm_provider": provider})
     client = FAKES[provider]()
-    report_path, audit = generate_report("SP", settings=settings, llm_client=client)
+    report_path, audit = generate_report(
+        "SP", settings=settings, llm_client=client, today=date(2026, 9, 30)
+    )
 
     html = report_path.read_text(encoding="utf-8")
     assert "Relatório de SRAG — SP" in html
@@ -165,6 +168,14 @@ def test_end_to_end_report(settings, provider):
 
     endpoint = _fake_endpoint(client)
     assert "<versao_anterior>" in endpoint.structured_calls[1]
+
+
+def test_stale_database_adds_warning(settings):
+    report_path, audit = generate_report(
+        "SP", settings=settings, llm_client=FAKES["gemini"](), today=date(2026, 11, 30)
+    )
+    assert "python -m srag_agent.data.update" in report_path.read_text(encoding="utf-8")
+    assert any(e["actor"] == "data_freshness" for e in audit.read())
 
 
 def test_invalid_input_is_blocked_before_llm(settings):
